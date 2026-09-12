@@ -7,7 +7,7 @@ namespace ConsoleApp1.Services;
 public interface IUserService
 {
     OperationResult Register(RegisterRequest request);
-    OperationResult<User> Authorize(LoginRequest request);
+    OperationResult<AuthenticatedUserDto> Authorize(LoginRequest request);
     OperationResult EditUser(EditUserRequest request);
     OperationResult DeleteUser(int id);
     List<User> GetAllUsers();

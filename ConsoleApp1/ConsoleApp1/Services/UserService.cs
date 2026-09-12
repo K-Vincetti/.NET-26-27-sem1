@@ -51,25 +51,25 @@ public class UserService : IUserService
         return OperationResult.Ok($"Пользователь \"{user.Username}\" зарегистрирован, id = {user.Id}");
     }
 
-    public OperationResult<User> Authorize(LoginRequest request)
+    public OperationResult<AuthenticatedUserDto> Authorize(LoginRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         {
-            return OperationResult<User>.Fail("Логин и пароль не могут быть пустыми");
+            return OperationResult<AuthenticatedUserDto>.Fail("Логин и пароль не могут быть пустыми");
         }
 
         var user = _repository.GetByUsername(request.Username);
         if (user == null)
         {
-            return OperationResult<User>.Fail("Пользователь не найден");
+            return OperationResult<AuthenticatedUserDto>.Fail("Пользователь не найден");
         }
 
         if (!_hasher.Verify(request.Password, user.Salt, user.PasswordHash))
         {
-            return OperationResult<User>.Fail("Неверный пароль");
+            return OperationResult<AuthenticatedUserDto>.Fail("Неверный пароль");
         }
 
-        return OperationResult<User>.Ok(user, "Авторизация успешна");
+        return OperationResult<AuthenticatedUserDto>.Ok(new AuthenticatedUserDto(user.Id, user.Username), "Авторизация успешна");
     }
 
     public OperationResult EditUser(EditUserRequest request)

@@ -19,7 +19,7 @@ public class UserController
         return _userService.Register(new RegisterRequest(username, password));
     }
 
-    public OperationResult<User> Authorize(string username, string password)
+    public OperationResult<AuthenticatedUserDto> Authorize(string username, string password)
     {
         return _userService.Authorize(new LoginRequest(username, password));
     }
