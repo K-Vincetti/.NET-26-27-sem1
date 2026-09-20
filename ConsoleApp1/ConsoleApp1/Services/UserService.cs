@@ -37,7 +37,7 @@ public class UserService : IUserService
         }
 
         var salt = _hasher.GenerateSalt();
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         var user = new User
         {
             Username = request.Username,
@@ -47,7 +47,14 @@ public class UserService : IUserService
             UpdatedAt = now
         };
 
-        _repository.Add(user);
+        try
+        {
+            _repository.Add(user);
+        }
+        catch (DuplicateUsernameException)
+        {
+            return OperationResult.Fail("Пользователь с таким логином уже существует");
+        }
         return OperationResult.Ok($"Пользователь \"{user.Username}\" зарегистрирован, id = {user.Id}");
     }
 
@@ -122,8 +129,15 @@ public class UserService : IUserService
             user.PasswordHash = _hasher.Hash(request.Password!, salt);
         }
 
-        user.UpdatedAt = DateTime.Now;
-        _repository.Update(user);
+        user.UpdatedAt = DateTime.UtcNow;
+        try
+        {
+            _repository.Update(user);
+        }
+        catch (DuplicateUsernameException)
+        {
+            return OperationResult.Fail("Такой логин уже занят");
+        }
         return OperationResult.Ok("Данные пользователя обновлены");
     }
 
@@ -144,16 +158,37 @@ public class UserService : IUserService
         return _repository.GetAll();
     }
 
-    public string ExportUsersAsJson(DateTime? from, DateTime? to)
+    public OperationResult<string> ExportUsersAsJson(DateTime? from, DateTime? to,
+        UserDateFilter filter = UserDateFilter.CreatedOrUpdated)
     {
+        from = NormalizeUtc(from);
+        to = NormalizeUtc(to);
+        if (from > to)
+        {
+            return OperationResult<string>.Fail("Дата начала позже даты конца");
+        }
+
         var users = _repository.GetAll()
-            .Where(u => InRange(u.CreatedAt, from, to) || InRange(u.UpdatedAt, from, to))
+            .Where(user => filter switch
+            {
+                UserDateFilter.Created => InRange(user.CreatedAt, from, to),
+                UserDateFilter.Updated => InRange(user.UpdatedAt, from, to),
+                _ => InRange(user.CreatedAt, from, to) || InRange(user.UpdatedAt, from, to)
+            })
             .OrderBy(u => u.Id)
             .Select(u => new UserExportDto(u.Id, u.Username, u.CreatedAt, u.UpdatedAt))
             .ToList();
 
-        return JsonSerializer.Serialize(users, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(users, new JsonSerializerOptions { WriteIndented = true });
+        return OperationResult<string>.Ok(json, "Список пользователей получен");
     }
+
+    private static DateTime? NormalizeUtc(DateTime? value) => value?.Kind switch
+    {
+        DateTimeKind.Local => value.Value.ToUniversalTime(),
+        DateTimeKind.Unspecified => DateTime.SpecifyKind(value.Value, DateTimeKind.Utc),
+        _ => value
+    };
 
     private static bool InRange(DateTime value, DateTime? from, DateTime? to)
     {

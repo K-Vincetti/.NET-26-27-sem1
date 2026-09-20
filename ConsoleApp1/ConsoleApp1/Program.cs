@@ -1,3 +1,5 @@
+using System.Globalization;
+using ConsoleApp1.Models.Dto;
 using ConsoleApp1.Config;
 using ConsoleApp1.Controllers;
 using ConsoleApp1.Repositories;
@@ -45,6 +47,7 @@ while (true)
         case "6":
             ExportUsers(controller);
             break;
+        case null:
         case "0":
             return;
         default:
@@ -128,30 +131,48 @@ static void ShowUsers(UserController controller)
 
 static void ExportUsers(UserController controller)
 {
-    var from = ReadOptionalDate("Дата начала (например 2026-09-01), Enter — без ограничения: ");
-    var to = ReadOptionalDate("Дата конца (например 2026-09-30), Enter — без ограничения: ");
-    var toInclusive = to?.Date.AddDays(1).AddTicks(-1);
+    Console.Write("По какой дате (1 — создание, 2 — обновление, Enter — любая): ");
+    var selection = Console.ReadLine();
+    if (selection is not ("" or "1" or "2"))
+    {
+        Console.WriteLine("Некорректный вариант фильтра");
+        return;
+    }
 
-    var json = controller.ExportUsersAsJson(from, toInclusive);
-    Console.WriteLine(json);
+    var filter = selection switch
+    {
+        "1" => UserDateFilter.Created,
+        "2" => UserDateFilter.Updated,
+        _ => UserDateFilter.CreatedOrUpdated
+    };
+    if (!TryReadOptionalDate("Дата начала UTC (ГГГГ-ММ-ДД), Enter — без ограничения: ", TimeOnly.MinValue, out var from)
+        || !TryReadOptionalDate("Дата конца UTC (ГГГГ-ММ-ДД), Enter — без ограничения: ", TimeOnly.MaxValue, out var to))
+    {
+        Console.WriteLine("Некорректная дата. Используйте формат ГГГГ-ММ-ДД");
+        return;
+    }
+
+    var result = controller.ExportUsersAsJson(from, to, filter);
+    Console.WriteLine(result.Success ? result.Data : result.Message);
 }
 
-static DateTime? ReadOptionalDate(string prompt)
+static bool TryReadOptionalDate(string prompt, TimeOnly time, out DateTime? value)
 {
     Console.Write(prompt);
     var input = Console.ReadLine();
-    if (string.IsNullOrWhiteSpace(input))
+    value = null;
+    if (input == "")
     {
-        return null;
+        return true;
     }
 
-    if (DateTime.TryParse(input, out var date))
+    if (!DateOnly.TryParseExact(input, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
     {
-        return date;
+        return false;
     }
 
-    Console.WriteLine("Не удалось распознать дату, значение проигнорировано");
-    return null;
+    value = date.ToDateTime(time, DateTimeKind.Utc);
+    return true;
 }
 
 static string ReadPassword()

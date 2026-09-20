@@ -11,5 +11,6 @@ public interface IUserService
     OperationResult EditUser(EditUserRequest request);
     OperationResult DeleteUser(int id);
     List<User> GetAllUsers();
-    string ExportUsersAsJson(DateTime? from, DateTime? to);
+    OperationResult<string> ExportUsersAsJson(DateTime? from, DateTime? to,
+        UserDateFilter filter = UserDateFilter.CreatedOrUpdated);
 }

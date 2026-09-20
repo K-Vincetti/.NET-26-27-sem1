@@ -39,8 +39,9 @@ public class UserController
         return _userService.GetAllUsers();
     }
 
-    public string ExportUsersAsJson(DateTime? from, DateTime? to)
+    public OperationResult<string> ExportUsersAsJson(DateTime? from, DateTime? to,
+        UserDateFilter filter = UserDateFilter.CreatedOrUpdated)
     {
-        return _userService.ExportUsersAsJson(from, to);
+        return _userService.ExportUsersAsJson(from, to, filter);
     }
 }

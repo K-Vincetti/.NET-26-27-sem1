@@ -66,7 +66,14 @@ public class PostgresUserRepository : IUserRepository
         command.Parameters.AddWithValue("createdAt", user.CreatedAt);
         command.Parameters.AddWithValue("updatedAt", user.UpdatedAt);
 
-        user.Id = (int)command.ExecuteScalar()!;
+        try
+        {
+            user.Id = (int)command.ExecuteScalar()!;
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new DuplicateUsernameException();
+        }
     }
 
     public void Update(User user)
@@ -84,7 +91,14 @@ public class PostgresUserRepository : IUserRepository
         command.Parameters.AddWithValue("updatedAt", user.UpdatedAt);
         command.Parameters.AddWithValue("id", user.Id);
 
-        command.ExecuteNonQuery();
+        try
+        {
+            command.ExecuteNonQuery();
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new DuplicateUsernameException();
+        }
     }
 
     public void Delete(int id)
@@ -99,16 +113,64 @@ public class PostgresUserRepository : IUserRepository
     private void EnsureSchema()
     {
         using var connection = OpenConnection();
+        using var transaction = connection.BeginTransaction();
         using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
+            SELECT pg_advisory_xact_lock(286408841);
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 salt TEXT NOT NULL,
-                created_at TIMESTAMP NOT NULL,
-                updated_at TIMESTAMP NOT NULL
-            )
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username_lower ON users (lower(username));
+            """;
+        command.ExecuteNonQuery();
+
+        command.CommandText = """
+            SELECT atttypid = 'timestamp without time zone'::regtype
+            FROM pg_attribute WHERE attrelid = 'users'::regclass AND attname = 'created_at'
+            """;
+        if (command.ExecuteScalar() is true)
+        {
+            MigrateLegacyDates(command);
+        }
+
+        transaction.Commit();
+    }
+
+    private static void MigrateLegacyDates(NpgsqlCommand command)
+    {
+        var legacyTimeZone = Environment.GetEnvironmentVariable("LEGACY_DB_TIME_ZONE");
+        if (string.IsNullOrWhiteSpace(legacyTimeZone))
+        {
+            command.CommandText = "SELECT EXISTS (SELECT 1 FROM users)";
+            if (command.ExecuteScalar() is true)
+            {
+                throw new InvalidOperationException("Укажите LEGACY_DB_TIME_ZONE для преобразования старых дат");
+            }
+
+            legacyTimeZone = "UTC";
+        }
+
+        command.CommandText = "SELECT EXISTS (SELECT 1 FROM pg_timezone_names WHERE name = @zone)";
+        command.Parameters.AddWithValue("zone", legacyTimeZone);
+        if (command.ExecuteScalar() is false)
+        {
+            throw new InvalidOperationException("LEGACY_DB_TIME_ZONE должен содержать имя часового пояса PostgreSQL");
+        }
+
+        // Применяем исходный пояс только в транзакции миграции.
+        command.CommandText = "SELECT set_config('TimeZone', @zone, true)";
+        command.ExecuteScalar();
+        command.Parameters.Clear();
+        command.CommandText = """
+            ALTER TABLE users
+                ALTER COLUMN created_at TYPE TIMESTAMPTZ,
+                ALTER COLUMN updated_at TYPE TIMESTAMPTZ
             """;
         command.ExecuteNonQuery();
     }

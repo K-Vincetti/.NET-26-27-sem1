@@ -9,7 +9,7 @@ public class UserValidator : IUserValidator
     private const int PasswordMinLength = 6;
     private const int PasswordMaxLength = 100;
 
-    private static readonly Regex UsernamePattern = new("^[a-zA-Z0-9_]+$", RegexOptions.Compiled);
+    private static readonly Regex UsernamePattern = new(@"\A[a-zA-Z0-9_]+\z", RegexOptions.Compiled);
 
     public List<string> ValidateUsername(string? username)
     {

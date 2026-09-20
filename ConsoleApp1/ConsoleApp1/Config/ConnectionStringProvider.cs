@@ -1,22 +1,35 @@
 using System.Text.Json;
+using Npgsql;
 
 namespace ConsoleApp1.Config;
 
 public static class ConnectionStringProvider
 {
-    public static string Get(string name = "Postgres")
+    public static string Get()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-        var json = File.ReadAllText(path);
-
-        using var document = JsonDocument.Parse(json);
-        var value = document.RootElement.GetProperty("ConnectionStrings").GetProperty(name).GetString();
-
-        if (string.IsNullOrWhiteSpace(value))
+        var configured = Environment.GetEnvironmentVariable("ConnectionStrings__Postgres");
+        if (!string.IsNullOrWhiteSpace(configured))
         {
-            throw new InvalidOperationException($"Строка подключения \"{name}\" не найдена в appsettings.json");
+            return configured;
         }
 
-        return value;
+        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var connection = new NpgsqlConnectionStringBuilder(
+            document.RootElement.GetProperty("ConnectionStrings").GetProperty("Postgres").GetString());
+        var password = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD");
+        if (string.IsNullOrEmpty(password))
+        {
+            throw new InvalidOperationException("Задайте POSTGRES_PASSWORD или ConnectionStrings__Postgres");
+        }
+
+        connection.Password = password;
+        var port = Environment.GetEnvironmentVariable("POSTGRES_PORT");
+        if (!string.IsNullOrEmpty(port))
+        {
+            connection.Port = int.Parse(port);
+        }
+
+        return connection.ConnectionString;
     }
 }
