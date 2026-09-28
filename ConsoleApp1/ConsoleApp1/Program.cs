@@ -1,8 +1,14 @@
+using ConsoleApp1.Config;
 using ConsoleApp1.Controllers;
-using ConsoleApp1.Data;
+using ConsoleApp1.Repositories;
+using ConsoleApp1.Services;
+using ConsoleApp1.Validation;
 
-var repository = new UserRepository();
-var controller = new UserController(repository);
+IUserRepository repository = new PostgresUserRepository(ConnectionStringProvider.Get());
+IPasswordHasher hasher = new PasswordHasher();
+IUserValidator validator = new UserValidator();
+IUserService userService = new UserService(repository, hasher, validator);
+var controller = new UserController(userService);
 
 while (true)
 {
@@ -12,6 +18,7 @@ while (true)
     Console.WriteLine("3 - Редактировать пользователя");
     Console.WriteLine("4 - Удалить пользователя");
     Console.WriteLine("5 - Список пользователей");
+    Console.WriteLine("6 - Экспорт пользователей в JSON за период");
     Console.WriteLine("0 - Выход");
     Console.Write("Выберите пункт: ");
 
@@ -34,6 +41,9 @@ while (true)
             break;
         case "5":
             ShowUsers(controller);
+            break;
+        case "6":
+            ExportUsers(controller);
             break;
         case "0":
             return;
@@ -63,9 +73,9 @@ static void LoginUser(UserController controller)
 
     var result = controller.Authorize(username, password);
     Console.WriteLine(result.Message);
-    if (result.Success && result.User != null)
+    if (result.Success && result.Data != null)
     {
-        Console.WriteLine($"Добро пожаловать, {result.User.Username} (id = {result.User.Id})");
+        Console.WriteLine($"Добро пожаловать, {result.Data.Username} (id = {result.Data.Id})");
     }
 }
 
@@ -112,8 +122,36 @@ static void ShowUsers(UserController controller)
 
     foreach (var user in users)
     {
-        Console.WriteLine($"{user.Id} | {user.Username} | зарегистрирован {user.CreatedAt:g}");
+        Console.WriteLine($"{user.Id} | {user.Username} | создан {user.CreatedAt:g} | обновлён {user.UpdatedAt:g}");
     }
+}
+
+static void ExportUsers(UserController controller)
+{
+    var from = ReadOptionalDate("Дата начала (например 2026-09-01), Enter — без ограничения: ");
+    var to = ReadOptionalDate("Дата конца (например 2026-09-30), Enter — без ограничения: ");
+    var toInclusive = to?.Date.AddDays(1).AddTicks(-1);
+
+    var json = controller.ExportUsersAsJson(from, toInclusive);
+    Console.WriteLine(json);
+}
+
+static DateTime? ReadOptionalDate(string prompt)
+{
+    Console.Write(prompt);
+    var input = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(input))
+    {
+        return null;
+    }
+
+    if (DateTime.TryParse(input, out var date))
+    {
+        return date;
+    }
+
+    Console.WriteLine("Не удалось распознать дату, значение проигнорировано");
+    return null;
 }
 
 static string ReadPassword()

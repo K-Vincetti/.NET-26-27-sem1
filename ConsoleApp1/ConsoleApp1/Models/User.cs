@@ -7,4 +7,5 @@ public class User
     public string PasswordHash { get; set; } = string.Empty;
     public string Salt { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime UpdatedAt { get; set; } = DateTime.Now;
 }

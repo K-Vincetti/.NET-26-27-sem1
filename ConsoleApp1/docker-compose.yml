@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: consoleapp1-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: consoleapp1
+      POSTGRES_USER: consoleapp1
+      POSTGRES_PASSWORD: consoleapp1
+    ports:
+      - "5433:5432"
+    volumes:
+      - consoleapp1-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  consoleapp1-postgres-data:
