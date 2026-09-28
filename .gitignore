@@ -107,3 +107,6 @@ secrets.json
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# runtime data
+users.json
