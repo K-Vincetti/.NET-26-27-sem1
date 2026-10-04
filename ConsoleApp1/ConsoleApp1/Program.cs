@@ -5,12 +5,28 @@ using ConsoleApp1.Controllers;
 using ConsoleApp1.Repositories;
 using ConsoleApp1.Services;
 using ConsoleApp1.Validation;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 
-IUserRepository repository = new PostgresUserRepository(ConnectionStringProvider.Get());
+using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole(options => options.SingleLine = true)
+    .AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace));
+var logger = loggerFactory.CreateLogger("ConsoleApp1");
+IUserRepository repository;
+try
+{
+    repository = new PostgresUserRepository(ConnectionStringProvider.Get());
+}
+catch (Exception exception)
+{
+    logger.LogError("Не удалось запустить приложение ({ExceptionType})", exception.GetType().Name);
+    Console.Error.WriteLine("Проверьте подключение к PostgreSQL и настройки схемы в README.");
+    Environment.ExitCode = 1;
+    return;
+}
 IPasswordHasher hasher = new PasswordHasher();
 IUserValidator validator = new UserValidator();
 IUserService userService = new UserService(repository, hasher, validator);
-var controller = new UserController(userService);
+var controller = new UserController(userService, loggerFactory.CreateLogger<UserController>());
 
 while (true)
 {
@@ -27,32 +43,39 @@ while (true)
     var choice = Console.ReadLine();
     Console.WriteLine();
 
-    switch (choice)
+    try
     {
-        case "1":
-            RegisterUser(controller);
-            break;
-        case "2":
-            LoginUser(controller);
-            break;
-        case "3":
-            EditUser(controller);
-            break;
-        case "4":
-            DeleteUser(controller);
-            break;
-        case "5":
-            ShowUsers(controller);
-            break;
-        case "6":
-            ExportUsers(controller);
-            break;
-        case null:
-        case "0":
-            return;
-        default:
-            Console.WriteLine("Некорректный пункт меню");
-            break;
+        switch (choice)
+        {
+            case "1":
+                RegisterUser(controller);
+                break;
+            case "2":
+                LoginUser(controller);
+                break;
+            case "3":
+                EditUser(controller);
+                break;
+            case "4":
+                DeleteUser(controller);
+                break;
+            case "5":
+                ShowUsers(controller);
+                break;
+            case "6":
+                ExportUsers(controller);
+                break;
+            case null:
+            case "0":
+                return;
+            default:
+                Console.WriteLine("Некорректный пункт меню");
+                break;
+        }
+    }
+    catch (NpgsqlException)
+    {
+        Console.Error.WriteLine("Операция не выполнена. Проверьте доступность PostgreSQL.");
     }
 }
 
@@ -129,12 +152,13 @@ static void ShowUsers(UserController controller)
     }
 }
 
-static void ExportUsers(UserController controller)
+void ExportUsers(UserController controller)
 {
     Console.Write("По какой дате (1 — создание, 2 — обновление, Enter — любая): ");
     var selection = Console.ReadLine();
     if (selection is not ("" or "1" or "2"))
     {
+        logger.LogWarning("Экспорт отклонён: Некорректный вариант фильтра");
         Console.WriteLine("Некорректный вариант фильтра");
         return;
     }
@@ -148,6 +172,7 @@ static void ExportUsers(UserController controller)
     if (!TryReadOptionalDate("Дата начала UTC (ГГГГ-ММ-ДД), Enter — без ограничения: ", TimeOnly.MinValue, out var from)
         || !TryReadOptionalDate("Дата конца UTC (ГГГГ-ММ-ДД), Enter — без ограничения: ", TimeOnly.MaxValue, out var to))
     {
+        logger.LogWarning("Экспорт отклонён: Некорректная дата. Используйте формат ГГГГ-ММ-ДД");
         Console.WriteLine("Некорректная дата. Используйте формат ГГГГ-ММ-ДД");
         return;
     }
