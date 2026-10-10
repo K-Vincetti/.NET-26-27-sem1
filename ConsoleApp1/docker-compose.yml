@@ -2,6 +2,11 @@ services:
   postgres:
     image: postgres:16
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "consoleapp1", "-d", "consoleapp1", "-h", "127.0.0.1"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
     environment:
       POSTGRES_DB: consoleapp1
       POSTGRES_USER: consoleapp1
@@ -10,6 +15,11 @@ services:
       - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     volumes:
       - consoleapp1-postgres-data:/var/lib/postgresql/data
+
+  reports:
+    build: ./UserReportService
+    ports:
+      - "127.0.0.1:${REPORT_SERVICE_PORT:-5080}:8080"
 
 volumes:
   consoleapp1-postgres-data:

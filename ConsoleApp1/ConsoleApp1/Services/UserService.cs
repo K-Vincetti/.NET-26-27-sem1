@@ -153,9 +153,9 @@ public class UserService : IUserService
         return OperationResult.Ok($"Пользователь \"{user.Username}\" удалён");
     }
 
-    public List<User> GetAllUsers()
+    public List<UserExportDto> GetAllUsers()
     {
-        return _repository.GetAll();
+        return _repository.GetAll().Select(ToExportDto).ToList();
     }
 
     public OperationResult<string> ExportUsersAsJson(DateTime? from, DateTime? to,
@@ -176,12 +176,15 @@ public class UserService : IUserService
                 _ => InRange(user.CreatedAt, from, to) || InRange(user.UpdatedAt, from, to)
             })
             .OrderBy(u => u.Id)
-            .Select(u => new UserExportDto(u.Id, u.Username, u.CreatedAt, u.UpdatedAt))
+            .Select(ToExportDto)
             .ToList();
 
         var json = JsonSerializer.Serialize(users, new JsonSerializerOptions { WriteIndented = true });
         return OperationResult<string>.Ok(json, "Список пользователей получен");
     }
+
+    private static UserExportDto ToExportDto(User user) =>
+        new(user.Id, user.Username, user.CreatedAt, user.UpdatedAt);
 
     private static DateTime? NormalizeUtc(DateTime? value) => value?.Kind switch
     {

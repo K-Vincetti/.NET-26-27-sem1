@@ -1,5 +1,4 @@
 using ConsoleApp1.Common;
-using ConsoleApp1.Models;
 using ConsoleApp1.Models.Dto;
 using ConsoleApp1.Services;
 using Microsoft.Extensions.Logging;
@@ -38,7 +37,7 @@ public class UserController
         return Execute(nameof(DeleteUser), () => _userService.DeleteUser(id));
     }
 
-    public List<User> GetAllUsers()
+    public List<UserExportDto> GetAllUsers()
     {
         return Execute(nameof(GetAllUsers), () => _userService.GetAllUsers());
     }

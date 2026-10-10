@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using ConsoleApp1.Models.Dto;
 using ConsoleApp1.Config;
 using ConsoleApp1.Controllers;
@@ -7,6 +8,16 @@ using ConsoleApp1.Services;
 using ConsoleApp1.Validation;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+
+if (Console.IsInputRedirected)
+{
+    Console.InputEncoding = Encoding.UTF8;
+}
+
+if (Console.IsOutputRedirected || Console.IsErrorRedirected)
+{
+    Console.OutputEncoding = Encoding.UTF8;
+}
 
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole(options => options.SingleLine = true)
     .AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace));
@@ -28,6 +39,22 @@ IUserValidator validator = new UserValidator();
 IUserService userService = new UserService(repository, hasher, validator);
 var controller = new UserController(userService, loggerFactory.CreateLogger<UserController>());
 
+var reportServiceUrl = Environment.GetEnvironmentVariable("REPORT_SERVICE_URL") ?? "http://localhost:5080";
+if (!Uri.TryCreate(reportServiceUrl.TrimEnd('/') + "/", UriKind.Absolute, out var reportServiceAddress)
+    || reportServiceAddress.Scheme is not ("http" or "https"))
+{
+    logger.LogError("Некорректный адрес сервиса печати. Проверьте REPORT_SERVICE_URL");
+    Environment.ExitCode = 1;
+    return;
+}
+
+using var httpClient = new HttpClient
+{
+    BaseAddress = reportServiceAddress,
+    Timeout = TimeSpan.FromSeconds(3)
+};
+var reportClient = new UserReportClient(httpClient, loggerFactory.CreateLogger<UserReportClient>());
+
 while (true)
 {
     Console.WriteLine();
@@ -37,6 +64,7 @@ while (true)
     Console.WriteLine("4 - Удалить пользователя");
     Console.WriteLine("5 - Список пользователей");
     Console.WriteLine("6 - Экспорт пользователей в JSON за период");
+    Console.WriteLine("7 - Печатный отчёт о пользователях");
     Console.WriteLine("0 - Выход");
     Console.Write("Выберите пункт: ");
 
@@ -64,6 +92,10 @@ while (true)
                 break;
             case "6":
                 ExportUsers(controller);
+                break;
+            case "7":
+                var report = await reportClient.CreateReportAsync(controller.GetAllUsers());
+                Console.WriteLine(report.Success ? report.Data : report.Message);
                 break;
             case null:
             case "0":
