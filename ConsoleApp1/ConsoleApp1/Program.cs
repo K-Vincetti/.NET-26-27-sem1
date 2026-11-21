@@ -30,7 +30,7 @@ try
 catch (Exception exception)
 {
     logger.LogError("Не удалось запустить приложение ({ExceptionType})", exception.GetType().Name);
-    Console.Error.WriteLine("Проверьте подключение к PostgreSQL и настройки схемы в README.");
+    Console.Error.WriteLine("Проверьте подключение к PostgreSQL. Для старой базы укажите LEGACY_DB_TIME_ZONE.");
     Environment.ExitCode = 1;
     return;
 }

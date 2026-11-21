@@ -27,3 +27,5 @@ app.MapPost("/reports/users", (ReportUser?[] users, ILoggerFactory loggerFactory
 app.Run();
 
 record ReportUser(int Id, string Username, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+
+public sealed class ReportServiceAssembly;
